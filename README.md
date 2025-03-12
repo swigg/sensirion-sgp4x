@@ -7,10 +7,10 @@ to allow generalized use on any [`no_std`](https://docs.rust-embedded.org/book/i
 
 The SGP4x family of digital gas sensors, including the SGP40 and SGP41, is designed for seamless integration into air purifiers and demand-controlled ventilation systems. Leveraging Sensirion’s CMOSens® technology, these sensors offer a complete, easy-to-use solution on a single chip, featuring a digital I<sup>2</sup>C interface and temperature-controlled micro hotplates. The SGP40 provides a humidity-compensated VOC-based indoor air quality signal, which can be processed using Sensirion’s Gas Index Algorithm to generate a VOC Index. The SGP41 expands on this functionality by delivering both VOC and NOx-based indoor air quality signals, enabling more comprehensive air quality monitoring.
 
-| Device | VOC | NOx |
-|--------|-----|-----|
-| SGP40  | ✅  |     |
-| SGP41  | ✅  | ✅  |
+| Model  | Measures  | Humidity Compensation | Output | Best For |
+|--------|----------|----------------------|--------|---------|
+| **SGP40** | VOCs | Yes | VOC raw signal (processed into VOC Index) | Air purifiers, HVAC, demand-controlled ventilation |
+| **SGP41** | VOCs + NOx | Yes | VOC and NOx raw signals (processed into VOC & NOx Indexes) | Advanced air quality monitoring, smart homes |
 
 ## Features
 
