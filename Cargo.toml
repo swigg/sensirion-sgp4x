@@ -2,5 +2,33 @@
 name = "sensirion-sgp4x"
 version = "0.1.0"
 edition = "2024"
+authors = ["Dustin Sweigart <dustin@swigg.net>"]
+license = "MIT"
+keywords = ["sensirion", "sensor", "VOC", "NOx", "sgp4x"]
+categories = ["embedded", "hardware-support", "no-std"]
+homepage = "https://github.com/swigg/sensirion-sgp4x"
+repository = "https://github.com/swigg/sensirion-sgp4x"
+include = ["/**/*.rs", "/Cargo.toml", "/README.md"]
+readme = "README.md"
+publish = false
 
 [dependencies]
+bitflags = "2.9.0"
+bytes = { version = "1.10.0", default-features = false }
+embedded-hal = "1.0.0"
+embedded-hal-async = { version = "1.0.0", optional = true }
+log = "0.4.26"
+sensirion-i2c = "0.4.0"
+sensirion-core = { git = "https://gitea.swigg.net/dustins/sensirion-core", branch = "develop" }
+measurements = "0.11.0"
+assert_matches = "1.5.0"
+
+[dev-dependencies]
+ctor = "0.4.0"
+embedded-hal-mock = { version = "0.11.1" }
+env_logger = "0.11.6"
+futures = { version = "0.3.31", default-features = false, features = ["executor"] }
+
+[features]
+default = ["embedded-hal-async"]
+embedded-hal-async = ["dep:embedded-hal-async", "embedded-hal-mock/embedded-hal-async", "sensirion-i2c/embedded-hal-async", "sensirion-core/embedded-hal-async"]
