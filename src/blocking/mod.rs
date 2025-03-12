@@ -20,8 +20,8 @@ pub struct Sgp4x<I2C, A, D, V> {
 
 impl<I2C, A, D, V> Sgp4x<I2C, A, D, V>
 where
-    I2C: embedded_hal_async::i2c::I2c,
-    D: embedded_hal_async::delay::DelayNs,
+    I2C: embedded_hal::i2c::I2c,
+    D: embedded_hal::delay::DelayNs,
 {
     /// Transforms the driver into a different variant.
     pub fn into_variant<T: DeviceVariant>(self) -> Sgp4x<I2C, A, D, T> {
@@ -237,8 +237,9 @@ mod tests {
 
     #[test]
     fn test_new() {
-        create_i2c::<Sgp40, _>(&[], |device| {
-            log::info!("Address: {}", device.address);
+        create_i2c::<Sgp40, _>(&[], |sht3x| {
+            #[cfg(feature = "log")]
+            log::info!("Address {}", sht3x.address);
         });
     }
 
