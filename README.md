@@ -1,1 +1,1 @@
-# sensirion-sht3x
+# sensirion-sgp4x
