@@ -219,8 +219,8 @@ mod tests {
         Duration: From<Command<V>>,
     {
         let mut i2c_mock = embedded_hal_mock::eh1::i2c::Mock::new(expectations);
-        let sht3x = create_device(&mut i2c_mock);
-        action(sht3x);
+        let device = create_device(&mut i2c_mock);
+        action(device);
         i2c_mock.done();
     }
 
