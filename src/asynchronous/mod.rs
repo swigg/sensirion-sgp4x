@@ -9,7 +9,7 @@ use crate::{
     DEFAULT_I2C_ADDRESS, DeviceVariant, RawMeasurement, Sgp40, Sgp41, TestResult, command::Command,
 };
 
-/// Represents a blocking driver for the SGP4x device.
+/// A asynchronous driver for the SGP4x device.
 #[derive(Debug, Default)]
 pub struct Sgp4x<I2C, A, D, V>
 where
@@ -25,18 +25,18 @@ where
 impl<I2C, A, D, V> Sgp4x<I2C, A, D, V>
 where
     I2C: embedded_hal_async::i2c::I2c,
-    D: embedded_hal_async::delay::DelayNs, {
-    ///
+    D: embedded_hal_async::delay::DelayNs,
+{
+    /// Transforms the driver into a different variant.
     pub fn into_variant<T: DeviceVariant>(self) -> Sgp4x<I2C, A, D, T> {
         Sgp4x::<I2C, A, D, T> {
             i2c: self.i2c,
             address: self.address,
             delay: self.delay,
-            variant: PhantomData::default()
+            variant: PhantomData::default(),
         }
     }
 }
-
 
 impl<I2C, D, V> SensirionI2c<I2C, SevenBitAddress, D> for Sgp4x<I2C, SevenBitAddress, D, V>
 where
@@ -64,7 +64,7 @@ where
     u16: From<Command<Sgp41>>,
     Duration: From<Command<Sgp41>>,
 {
-    ///
+    /// Initiates the conditioning process for the device.
     pub async fn execute_conditioning(&mut self) -> Result<RawMeasurement, Error<I2C::Error>> {
         let mut buffer = BytesMut::with_capacity(3);
         buffer.resize(3, 0);
@@ -74,7 +74,7 @@ where
             .map(RawMeasurement::from)
     }
 
-    ///
+    /// Performs a measurement of raw signals without humidity compensation.
     pub async fn measure_raw_signals(&mut self) -> Result<RawMeasurement, Error<I2C::Error>> {
         let mut buffer = BytesMut::with_capacity(6);
         buffer.resize(6, 0);
@@ -84,7 +84,7 @@ where
             .map(RawMeasurement::from)
     }
 
-    ///
+    /// Performs a measurement of raw signals with humidity compensation.
     pub async fn measure_raw_signals_with_compensation(
         &mut self,
         temperature: Temperature,
@@ -114,7 +114,7 @@ where
     u16: From<Command<Sgp40>>,
     Duration: From<Command<Sgp40>>,
 {
-    ///
+    /// Performs a measurement of raw signals without humidity compensation.
     pub async fn measure_raw_signals(&mut self) -> Result<RawMeasurement, Error<I2C::Error>> {
         let mut buffer = BytesMut::with_capacity(6);
         buffer.resize(3, 0);
@@ -124,7 +124,7 @@ where
             .map(RawMeasurement::from)
     }
 
-    ///
+    /// Performs a measurement of raw signals with humidity compensation.
     pub async fn measure_raw_signals_with_compensation(
         &mut self,
         temperature: Temperature,
@@ -151,16 +151,16 @@ impl<I2C, D, V> Sgp4x<I2C, SevenBitAddress, D, V>
 where
     I2C: embedded_hal_async::i2c::I2c + Debug,
     D: embedded_hal_async::delay::DelayNs,
-    V: DeviceVariant + Debug + Copy,
+    V: DeviceVariant,
     u16: From<Command<V>>,
     Duration: From<Command<V>>,
 {
-    /// Instantiate a new blocking SGP4x device driver.
+    /// Creates a new instance of the SGP4x device driver.
     pub fn new(i2c: I2C, delay: D) -> Self {
         Self::new_with_variant::<Sgp41>(i2c, delay)
     }
 
-    /// Instantiate a new blocking SGP4x device drvier.
+    /// Creates a new instance of the SGP4x device driver with a specific variant.
     pub fn new_with_variant<T: DeviceVariant>(i2c: I2C, delay: D) -> Self {
         Self {
             address: DEFAULT_I2C_ADDRESS,
@@ -170,7 +170,7 @@ where
         }
     }
 
-    ///
+    /// Executes the device's built-in self-test.
     pub async fn self_test(&mut self) -> Result<TestResult, Error<I2C::Error>> {
         let mut test_result = BytesMut::with_capacity(8);
         test_result.resize(3, 0);
@@ -182,12 +182,12 @@ where
             })
     }
 
-    ///
+    /// Disables the device's heater and stops measurements.
     pub async fn heater_disable(&mut self) -> Result<(), Error<I2C::Error>> {
         self.write_command(Command::HeaterDisable).await
     }
 
-    ///
+    /// Retrieves the device's serial number.
     pub async fn serial_number_fetch(&mut self) -> Result<u64, Error<I2C::Error>> {
         let mut serial_number = BytesMut::with_capacity(9);
         serial_number.resize(9, 0);
@@ -227,7 +227,7 @@ mod tests {
         T: AsyncFnOnce(
             Sgp4x<&mut embedded_hal_mock::common::Generic<Transaction>, u8, NoopDelay, V>,
         ),
-        V: DeviceVariant + Debug + Copy,
+        V: DeviceVariant,
         u16: From<Command<V>>,
         Duration: From<Command<V>>,
     {
@@ -241,7 +241,7 @@ mod tests {
         i2c: &mut embedded_hal_mock::common::Generic<Transaction>,
     ) -> Sgp4x<&mut embedded_hal_mock::common::Generic<Transaction>, u8, NoopDelay, V>
     where
-        V: DeviceVariant + Debug + Copy,
+        V: DeviceVariant,
         u16: From<Command<V>>,
         Duration: From<Command<V>>,
     {
@@ -518,7 +518,6 @@ mod tests {
                     .to_vec(),
             ),
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
-
             Transaction::write(
                 DEFAULT_I2C_ADDRESS,
                 u16::from(Command::<Sgp40>::MeasureRawSignal)
