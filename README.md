@@ -9,8 +9,8 @@ The SGP4x family of digital gas sensors, including the SGP40 and SGP41, is desig
 
 | Device | VOC | NOx |
 |--------|-----|-----|
-| SGP40  | [x] |     |
-| SGP41  | [x] | [x] |
+| SGP40  | ✅  |     |
+| SGP41  | ✅  | ✅  |
 
 ## Features
 
