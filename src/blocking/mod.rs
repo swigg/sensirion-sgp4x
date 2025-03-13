@@ -36,7 +36,7 @@ where
 
 impl<I2C, D, V> SensirionI2c<I2C, D> for Sgp4x<I2C, SevenBitAddress, D, V>
 where
-    I2C: embedded_hal::i2c::I2c + Debug,
+    I2C: embedded_hal::i2c::I2c,
     D: embedded_hal::delay::DelayNs,
     V: DeviceVariant,
 {
@@ -55,7 +55,7 @@ where
 
 impl<I2C, D> Sgp4x<I2C, SevenBitAddress, D, Sgp41>
 where
-    I2C: embedded_hal::i2c::I2c + Debug,
+    I2C: embedded_hal::i2c::I2c,
     D: embedded_hal::delay::DelayNs,
     u16: From<Command<Sgp41>>,
     Duration: From<Command<Sgp41>>,
@@ -102,7 +102,7 @@ where
 
 impl<I2C, D> Sgp4x<I2C, SevenBitAddress, D, Sgp40>
 where
-    I2C: embedded_hal::i2c::I2c + Debug,
+    I2C: embedded_hal::i2c::I2c,
     D: embedded_hal::delay::DelayNs,
     u16: From<Command<Sgp40>>,
     Duration: From<Command<Sgp40>>,
@@ -140,7 +140,7 @@ where
 
 impl<I2C, D, V> Sgp4x<I2C, SevenBitAddress, D, V>
 where
-    I2C: embedded_hal::i2c::I2c + Debug,
+    I2C: embedded_hal::i2c::I2c,
     D: embedded_hal::delay::DelayNs,
     V: DeviceVariant,
     u16: From<Command<V>>,
