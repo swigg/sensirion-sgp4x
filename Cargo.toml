@@ -21,7 +21,7 @@ sensirion-i2c = "0.4.0"
 sensirion-core = { git = "https://gitea.swigg.net/dustins/sensirion-core", branch = "develop" }
 measurements = "0.11.0"
 assert_matches = "1.5.0"
-log = { version = "0.4.26", optional = true }
+log = { version = "0.4.26", default-features = false, optional = true }
 
 [dev-dependencies]
 ctor = "0.4.0"
