@@ -92,3 +92,8 @@ impl From<Command<Sgp41>> for Duration {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+}

@@ -65,8 +65,12 @@ where
         let mut buffer = BytesMut::with_capacity(3);
         buffer.resize(3, 0);
 
-        self.read_command(Command::<Sgp41>::ExecuteConditioning, &mut buffer)
-            .map(RawMeasurement::from)
+        self.read_command_with_args(
+            Command::<Sgp41>::ExecuteConditioning,
+            Some(&[0x8000, 0x6666]),
+            &mut buffer,
+        )
+        .map(RawMeasurement::from)
     }
 
     /// Performs a measurement of raw signals without humidity compensation.
@@ -74,8 +78,12 @@ where
         let mut buffer = BytesMut::with_capacity(6);
         buffer.resize(6, 0);
 
-        self.read_command(Command::<Sgp41>::MeasureRawSignal, &mut buffer)
-            .map(RawMeasurement::from)
+        self.read_command_with_args(
+            Command::<Sgp41>::MeasureRawSignal,
+            Some(&[0x8000, 0x6666]),
+            &mut buffer,
+        )
+        .map(RawMeasurement::from)
     }
 
     /// Performs a measurement of raw signals with humidity compensation.
@@ -112,8 +120,12 @@ where
         let mut buffer = BytesMut::with_capacity(6);
         buffer.resize(3, 0);
 
-        self.read_command(Command::<Sgp40>::MeasureRawSignal, &mut buffer)
-            .map(RawMeasurement::from)
+        self.read_command_with_args(
+            Command::<Sgp40>::MeasureRawSignal,
+            Some(&[0x8000, 0x6666]),
+            &mut buffer,
+        )
+        .map(RawMeasurement::from)
     }
 
     /// Performs a measurement of raw signals with humidity compensation.
@@ -321,13 +333,19 @@ mod tests {
             &44u16.to_be_bytes().to_vec(),
         ));
 
+        let mut expected = BytesMut::with_capacity(8);
+        expected.put_u16(u16::from(Command::<Sgp40>::MeasureRawSignal));
+        expected.put_u16(0x8000);
+        expected.put_u8(sensirion_i2c::crc8::calculate(
+            &(0x8000 as u16).to_be_bytes().to_vec(),
+        ));
+        expected.put_u16(0x6666);
+        expected.put_u8(sensirion_i2c::crc8::calculate(
+            &(0x6666 as u16).to_be_bytes().to_vec(),
+        ));
+
         let expectations = [
-            Transaction::write(
-                DEFAULT_I2C_ADDRESS,
-                u16::from(Command::<Sgp40>::MeasureRawSignal)
-                    .to_be_bytes()
-                    .to_vec(),
-            ),
+            Transaction::write(DEFAULT_I2C_ADDRESS, expected.to_vec()),
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
         ];
 
@@ -351,13 +369,19 @@ mod tests {
             &66u16.to_be_bytes().to_vec(),
         ));
 
+        let mut expected = BytesMut::with_capacity(8);
+        expected.put_u16(u16::from(Command::<Sgp41>::MeasureRawSignal));
+        expected.put_u16(0x8000);
+        expected.put_u8(sensirion_i2c::crc8::calculate(
+            &(0x8000 as u16).to_be_bytes().to_vec(),
+        ));
+        expected.put_u16(0x6666);
+        expected.put_u8(sensirion_i2c::crc8::calculate(
+            &(0x6666 as u16).to_be_bytes().to_vec(),
+        ));
+
         let expectations = [
-            Transaction::write(
-                DEFAULT_I2C_ADDRESS,
-                u16::from(Command::<Sgp41>::MeasureRawSignal)
-                    .to_be_bytes()
-                    .to_vec(),
-            ),
+            Transaction::write(DEFAULT_I2C_ADDRESS, expected.to_vec()),
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
         ];
 
@@ -461,13 +485,19 @@ mod tests {
             &44u16.to_be_bytes().to_vec(),
         ));
 
+        let mut expected = BytesMut::with_capacity(8);
+        expected.put_u16(u16::from(Command::<Sgp41>::ExecuteConditioning));
+        expected.put_u16(0x8000);
+        expected.put_u8(sensirion_i2c::crc8::calculate(
+            &(0x8000 as u16).to_be_bytes().to_vec(),
+        ));
+        expected.put_u16(0x6666);
+        expected.put_u8(sensirion_i2c::crc8::calculate(
+            &(0x6666 as u16).to_be_bytes().to_vec(),
+        ));
+
         let expectations = [
-            Transaction::write(
-                DEFAULT_I2C_ADDRESS,
-                u16::from(Command::<Sgp41>::ExecuteConditioning)
-                    .to_be_bytes()
-                    .to_vec(),
-            ),
+            Transaction::write(DEFAULT_I2C_ADDRESS, expected.to_vec()),
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
         ];
 
@@ -491,20 +521,21 @@ mod tests {
             &66u16.to_be_bytes().to_vec(),
         ));
 
+        let mut expected = BytesMut::with_capacity(8);
+        expected.put_u16(u16::from(Command::<Sgp41>::MeasureRawSignal));
+        expected.put_u16(0x8000);
+        expected.put_u8(sensirion_i2c::crc8::calculate(
+            &(0x8000 as u16).to_be_bytes().to_vec(),
+        ));
+        expected.put_u16(0x6666);
+        expected.put_u8(sensirion_i2c::crc8::calculate(
+            &(0x6666 as u16).to_be_bytes().to_vec(),
+        ));
+
         let expectations = [
-            Transaction::write(
-                DEFAULT_I2C_ADDRESS,
-                u16::from(Command::<Sgp41>::MeasureRawSignal)
-                    .to_be_bytes()
-                    .to_vec(),
-            ),
+            Transaction::write(DEFAULT_I2C_ADDRESS, expected.to_vec()),
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
-            Transaction::write(
-                DEFAULT_I2C_ADDRESS,
-                u16::from(Command::<Sgp40>::MeasureRawSignal)
-                    .to_be_bytes()
-                    .to_vec(),
-            ),
+            Transaction::write(DEFAULT_I2C_ADDRESS, expected.to_vec()),
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals[0..3].to_vec()),
         ];
 
