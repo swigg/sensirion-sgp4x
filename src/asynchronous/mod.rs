@@ -135,9 +135,8 @@ where
 {
     fn command_convert(&self, command: Command) -> CommandConvert {
         match command {
-            Command::MeasureRawSignal => CommandConvert::new(0x260f, Duration::from_millis(30)),
-            Command::MeasureRawSignalWithCompensation(..) => {
-                CommandConvert::new(0x260f, Duration::from_millis(50))
+            Command::MeasureRawSignal | Command::MeasureRawSignalWithCompensation(..) => {
+                CommandConvert::new(0x260f, Duration::from_millis(30))
             }
             _ => self.default_command_convert(command),
         }
@@ -258,8 +257,7 @@ where
     fn command_convert(&self, command: Command) -> CommandConvert {
         match command {
             Command::ExecuteConditioning => CommandConvert::new(0x2612, Duration::from_millis(50)),
-            Command::MeasureRawSignal => CommandConvert::new(0x2619, Duration::from_millis(50)),
-            Command::MeasureRawSignalWithCompensation(..) => {
+            Command::MeasureRawSignal | Command::MeasureRawSignalWithCompensation(..) => {
                 CommandConvert::new(0x2619, Duration::from_millis(50))
             }
             _ => self.default_command_convert(command),
