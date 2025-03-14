@@ -22,19 +22,6 @@ pub mod command;
 /// Default I2C address for the SGP40/SGP41 sensor.
 pub const DEFAULT_I2C_ADDRESS: u8 = 0x59;
 
-/// Trait for representing typestate based on device variant.
-pub trait DeviceVariant: Copy + Debug {}
-
-/// SGP40 typestate representation.
-#[derive(Debug, Clone, Copy)]
-pub struct Sgp40;
-impl DeviceVariant for Sgp40 {}
-
-/// SGP41 typestate representation.
-#[derive(Debug, Clone, Copy)]
-pub struct Sgp41;
-impl DeviceVariant for Sgp41 {}
-
 /// Represents raw measurement data returned from the device.
 #[derive(Debug, Clone, Copy)]
 pub enum RawMeasurement {

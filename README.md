@@ -27,7 +27,7 @@ The SGP4x family of digital gas sensors, including the SGP40 and SGP41, is desig
 
 ```rust,no_run
 use sensirion_core::{Error};
-use sensirion_sgp4x::{blocking::Sgp4x, RawMeasurement};
+use sensirion_sgp4x::{blocking::Sgp41, RawMeasurement};
 use embedded_hal_mock::eh1::{delay::NoopDelay, i2c};
 
 fn main() {
@@ -35,7 +35,7 @@ fn main() {
     let mut i2c = i2c::Mock::new(&[]);
 
     // Create the sensor
-    let mut sensor = Sgp4x::new(i2c, NoopDelay::default());
+    let mut sensor = Sgp41::new(i2c, NoopDelay);
 
     // Perform measurement
     match sensor.execute_conditioning() {

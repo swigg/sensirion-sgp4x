@@ -1,4 +1,4 @@
-use core::{fmt::Debug, marker::PhantomData, time::Duration};
+use core::time::Duration;
 
 use bytes::{Buf, BytesMut};
 use embedded_hal::i2c::SevenBitAddress;
@@ -6,46 +6,136 @@ use measurements::{Humidity, Temperature};
 use sensirion_core::{Error, blocking::SensirionI2c};
 
 use crate::{
-    DEFAULT_I2C_ADDRESS, DeviceVariant, RawMeasurement, Sgp40, Sgp41, TestResult, command::Command,
+    DEFAULT_I2C_ADDRESS, RawMeasurement, TestResult,
+    command::{Command, CommandConvert},
 };
 
-/// A blocking driver for the SGP4x device.
-#[derive(Debug, Default)]
-pub struct Sgp4x<I2C, A, D, V> {
-    i2c: I2C,
-    address: A,
-    delay: D,
-    variant: PhantomData<V>,
-}
-
-impl<I2C, A, D, V> Sgp4x<I2C, A, D, V>
+trait Sgp4x<I2C, D>: SensirionI2c<I2C, D>
 where
     I2C: embedded_hal::i2c::I2c,
     D: embedded_hal::delay::DelayNs,
 {
-    /// Transforms the driver into a different variant.
-    pub fn into_variant<T: DeviceVariant>(self) -> Sgp4x<I2C, A, D, T> {
-        Sgp4x::<I2C, A, D, T> {
-            i2c: self.i2c,
-            address: self.address,
-            delay: self.delay,
-            variant: PhantomData::default(),
+    /// Executes the device's built-in self-test.
+    fn self_test(&mut self) -> Result<TestResult, Error<I2C::Error>> {
+        let mut test_result = BytesMut::with_capacity(8);
+        test_result.resize(3, 0);
+
+        self.read_command(
+            self.command_convert(Command::ExecuteSelfTest),
+            &mut test_result,
+        )
+        .map(|test_result| TestResult::from_bits_retain(test_result.get(0..2).unwrap().get_u16()))
+    }
+
+    /// Disables the device's heater and stops measurements.
+    fn heater_disable(&mut self) -> Result<(), Error<I2C::Error>> {
+        self.write_command(self.command_convert(Command::HeaterDisable))
+    }
+
+    /// Retrieves the device's serial number.
+    fn serial_number_fetch(&mut self) -> Result<u64, Error<I2C::Error>> {
+        let mut serial_number = BytesMut::with_capacity(9);
+        serial_number.resize(9, 0);
+
+        self.read_command(
+            self.command_convert(Command::SerialNumberFetch),
+            &mut serial_number,
+        )
+        .map(|serial_number| {
+            u64::from_be_bytes([
+                0,
+                0,
+                serial_number[0],
+                serial_number[1],
+                serial_number[3],
+                serial_number[4],
+                serial_number[6],
+                serial_number[7],
+            ])
+        })
+    }
+
+    fn default_command_convert(&self, command: Command) -> CommandConvert {
+        match command {
+            Command::ExecuteSelfTest => CommandConvert::new(0x280e, Duration::from_millis(320)),
+            Command::HeaterDisable => CommandConvert::new(0x3615, Duration::from_millis(1)),
+            Command::SerialNumberFetch => CommandConvert::new(0x3682, Duration::from_millis(1)),
+            _ => todo!(),
         }
+    }
+
+    fn command_convert(&self, command: Command) -> CommandConvert {
+        self.default_command_convert(command)
     }
 }
 
-impl<I2C, D, V> SensirionI2c<I2C, D> for Sgp4x<I2C, SevenBitAddress, D, V>
+///
+pub struct Sgp40<I2C, D> {
+    i2c: I2C,
+    delay: D,
+}
+
+impl<I2C, D> Sgp40<I2C, D> {
+    ///
+    pub fn new(i2c: I2C, delay: D) -> Self {
+        Self { i2c, delay }
+    }
+}
+
+impl<I2C, D> Sgp40<I2C, D>
 where
     I2C: embedded_hal::i2c::I2c,
     D: embedded_hal::delay::DelayNs,
-    V: DeviceVariant,
+{
+    /// Performs a measurement of raw signals without humidity compensation.
+    pub fn measure_raw_signals(&mut self) -> Result<RawMeasurement, Error<I2C::Error>> {
+        let mut buffer = BytesMut::with_capacity(3);
+        buffer.resize(3, 0);
+
+        self.read_command_with_args(
+            self.command_convert(Command::MeasureRawSignal),
+            Some(&[0x8000, 0x6666]),
+            &mut buffer,
+        )
+        .map(RawMeasurement::from)
+    }
+
+    /// Performs a measurement of raw signals with humidity compensation.
+    pub fn measure_raw_signals_with_compensation(
+        &mut self,
+        temperature: Temperature,
+        humidity: Humidity,
+    ) -> Result<RawMeasurement, Error<I2C::Error>> {
+        let mut buffer = BytesMut::with_capacity(3);
+        buffer.resize(3, 0);
+
+        let temperature_bytes =
+            (((temperature.as_celsius() + 45.0) * u16::MAX as f64) / 175.0) as u16;
+        let humidity_bytes = ((humidity.as_percent() * u16::MAX as f64) / 100.0) as u16;
+
+        self.read_command_with_args(
+            self.command_convert(Command::MeasureRawSignalWithCompensation(
+                temperature,
+                humidity,
+            )),
+            Some(&[temperature_bytes, humidity_bytes]),
+            &mut buffer,
+        )
+        .map(RawMeasurement::from)
+    }
+}
+
+impl<I2C, D> SensirionI2c<I2C, D> for Sgp40<I2C, D>
+where
+    I2C: embedded_hal::i2c::I2c,
+    D: embedded_hal::delay::DelayNs,
 {
     fn i2c(&mut self) -> &mut I2C {
         &mut self.i2c
     }
 
     fn address(&mut self) -> SevenBitAddress {
-        self.address
+        DEFAULT_I2C_ADDRESS
     }
 
     fn delay(&mut self) -> &mut D {
@@ -53,12 +143,39 @@ where
     }
 }
 
-impl<I2C, D> Sgp4x<I2C, SevenBitAddress, D, Sgp41>
+impl<I2C, D> Sgp4x<I2C, D> for Sgp40<I2C, D>
 where
     I2C: embedded_hal::i2c::I2c,
     D: embedded_hal::delay::DelayNs,
-    u16: From<Command<Sgp41>>,
-    Duration: From<Command<Sgp41>>,
+{
+    fn command_convert(&self, command: Command) -> CommandConvert {
+        match command {
+            Command::MeasureRawSignal => CommandConvert::new(0x260f, Duration::from_millis(30)),
+            Command::MeasureRawSignalWithCompensation(..) => {
+                CommandConvert::new(0x260f, Duration::from_millis(50))
+            }
+            _ => self.default_command_convert(command),
+        }
+    }
+}
+
+///
+pub struct Sgp41<I2C, D> {
+    i2c: I2C,
+    delay: D,
+}
+
+impl<I2C, D> Sgp41<I2C, D> {
+    ///
+    pub fn new(i2c: I2C, delay: D) -> Self {
+        Self { i2c, delay }
+    }
+}
+
+impl<I2C, D> Sgp41<I2C, D>
+where
+    I2C: embedded_hal::i2c::I2c,
+    D: embedded_hal::delay::DelayNs,
 {
     /// Initiates the conditioning process for the device.
     pub fn execute_conditioning(&mut self) -> Result<RawMeasurement, Error<I2C::Error>> {
@@ -66,7 +183,7 @@ where
         buffer.resize(3, 0);
 
         self.read_command_with_args(
-            Command::<Sgp41>::ExecuteConditioning,
+            self.command_convert(Command::ExecuteConditioning),
             Some(&[0x8000, 0x6666]),
             &mut buffer,
         )
@@ -79,7 +196,7 @@ where
         buffer.resize(6, 0);
 
         self.read_command_with_args(
-            Command::<Sgp41>::MeasureRawSignal,
+            self.command_convert(Command::MeasureRawSignal),
             Some(&[0x8000, 0x6666]),
             &mut buffer,
         )
@@ -100,7 +217,10 @@ where
         let humidity_bytes = ((humidity.as_percent() * u16::MAX as f64) / 100.0) as u16;
 
         self.read_command_with_args(
-            Command::<Sgp41>::MeasureRawSignalWithCompensation(temperature, humidity),
+            self.command_convert(Command::MeasureRawSignalWithCompensation(
+                temperature,
+                humidity,
+            )),
             Some(&[temperature_bytes, humidity_bytes]),
             &mut buffer,
         )
@@ -108,105 +228,38 @@ where
     }
 }
 
-impl<I2C, D> Sgp4x<I2C, SevenBitAddress, D, Sgp40>
+impl<I2C, D> Sgp4x<I2C, D> for Sgp41<I2C, D>
 where
     I2C: embedded_hal::i2c::I2c,
     D: embedded_hal::delay::DelayNs,
-    u16: From<Command<Sgp40>>,
-    Duration: From<Command<Sgp40>>,
 {
-    /// Performs a measurement of raw signals without humidity compensation.
-    pub fn measure_raw_signals(&mut self) -> Result<RawMeasurement, Error<I2C::Error>> {
-        let mut buffer = BytesMut::with_capacity(6);
-        buffer.resize(3, 0);
-
-        self.read_command_with_args(
-            Command::<Sgp40>::MeasureRawSignal,
-            Some(&[0x8000, 0x6666]),
-            &mut buffer,
-        )
-        .map(RawMeasurement::from)
-    }
-
-    /// Performs a measurement of raw signals with humidity compensation.
-    pub fn measure_raw_signals_with_compensation(
-        &mut self,
-        temperature: Temperature,
-        humidity: Humidity,
-    ) -> Result<RawMeasurement, Error<I2C::Error>> {
-        let mut buffer = BytesMut::with_capacity(6);
-        buffer.resize(3, 0);
-
-        let temperature_bytes =
-            (((temperature.as_celsius() + 45.0) * u16::MAX as f64) / 175.0) as u16;
-        let humidity_bytes = ((humidity.as_percent() * u16::MAX as f64) / 100.0) as u16;
-
-        self.read_command_with_args(
-            Command::<Sgp40>::MeasureRawSignalWithCompensation(temperature, humidity),
-            Some(&[temperature_bytes, humidity_bytes]),
-            &mut buffer,
-        )
-        .map(RawMeasurement::from)
-    }
-}
-
-impl<I2C, D, V> Sgp4x<I2C, SevenBitAddress, D, V>
-where
-    I2C: embedded_hal::i2c::I2c,
-    D: embedded_hal::delay::DelayNs,
-    V: DeviceVariant,
-    u16: From<Command<V>>,
-    Duration: From<Command<V>>,
-{
-    /// Creates a new instance of the SGP4x device driver.
-    pub fn new(i2c: I2C, delay: D) -> Self {
-        Self::new_with_variant::<Sgp41>(i2c, delay)
-    }
-
-    /// Creates a new instance of the SGP4x device driver with a specific variant.
-    pub fn new_with_variant<T: DeviceVariant>(i2c: I2C, delay: D) -> Self {
-        Self {
-            address: DEFAULT_I2C_ADDRESS,
-            i2c,
-            delay,
-            variant: PhantomData::default(),
+    fn command_convert(&self, command: Command) -> CommandConvert {
+        match command {
+            Command::ExecuteConditioning => CommandConvert::new(0x2612, Duration::from_millis(50)),
+            Command::MeasureRawSignal => CommandConvert::new(0x2619, Duration::from_millis(50)),
+            Command::MeasureRawSignalWithCompensation(..) => {
+                CommandConvert::new(0x2619, Duration::from_millis(50))
+            }
+            _ => self.default_command_convert(command),
         }
     }
+}
 
-    /// Executes the device's built-in self-test.
-    pub fn self_test(&mut self) -> Result<TestResult, Error<I2C::Error>> {
-        let mut test_result = BytesMut::with_capacity(8);
-        test_result.resize(3, 0);
-
-        self.read_command(Command::ExecuteSelfTest, &mut test_result)
-            .map(|test_result| {
-                TestResult::from_bits_retain(test_result.get(0..2).unwrap().get_u16())
-            })
+impl<I2C, D> SensirionI2c<I2C, D> for Sgp41<I2C, D>
+where
+    I2C: embedded_hal::i2c::I2c,
+    D: embedded_hal::delay::DelayNs,
+{
+    fn i2c(&mut self) -> &mut I2C {
+        &mut self.i2c
     }
 
-    /// Disables the device's heater and stops measurements.
-    pub fn heater_disable(&mut self) -> Result<(), Error<I2C::Error>> {
-        self.write_command(Command::HeaterDisable)
+    fn address(&mut self) -> SevenBitAddress {
+        DEFAULT_I2C_ADDRESS
     }
 
-    /// Retrieves the device's serial number.
-    pub fn serial_number_fetch(&mut self) -> Result<u64, Error<I2C::Error>> {
-        let mut serial_number = BytesMut::with_capacity(9);
-        serial_number.resize(9, 0);
-
-        self.read_command(Command::SerialNumberFetch, &mut serial_number)
-            .map(|serial_number| {
-                u64::from_be_bytes([
-                    0,
-                    0,
-                    serial_number[0],
-                    serial_number[1],
-                    serial_number[3],
-                    serial_number[4],
-                    serial_number[6],
-                    serial_number[7],
-                ])
-            })
+    fn delay(&mut self) -> &mut D {
+        &mut self.delay
     }
 }
 
@@ -214,44 +267,32 @@ where
 mod tests {
     use core::u16;
 
-    use crate::{Sgp40, Sgp41};
     use assert_matches::assert_matches;
     use bytes::BufMut;
 
     use super::*;
 
-    use embedded_hal_mock::eh1::{delay::NoopDelay, i2c::Transaction};
+    use embedded_hal_mock::{
+        common::Generic,
+        eh1::{delay::NoopDelay, i2c::Transaction},
+    };
     use measurements::{Humidity, Temperature};
 
-    fn create_i2c<V, T>(expectations: &[Transaction], action: T)
+    fn create_i2c<A>(expectations: &[Transaction], action: A)
     where
-        T: FnOnce(Sgp4x<&mut embedded_hal_mock::common::Generic<Transaction>, u8, NoopDelay, V>),
-        V: DeviceVariant,
-        u16: From<Command<V>>,
-        Duration: From<Command<V>>,
+        A: FnOnce(&mut Generic<Transaction>),
     {
         let mut i2c_mock = embedded_hal_mock::eh1::i2c::Mock::new(expectations);
-        let device = create_device(&mut i2c_mock);
-        action(device);
+        action(&mut i2c_mock);
         i2c_mock.done();
-    }
-
-    fn create_device<V>(
-        i2c: &mut embedded_hal_mock::common::Generic<Transaction>,
-    ) -> Sgp4x<&mut embedded_hal_mock::common::Generic<Transaction>, u8, NoopDelay, V>
-    where
-        V: DeviceVariant,
-        u16: From<Command<V>>,
-        Duration: From<Command<V>>,
-    {
-        Sgp4x::new_with_variant::<V>(i2c, NoopDelay::default())
     }
 
     #[test]
     fn test_new() {
-        create_i2c::<Sgp40, _>(&[], |sht3x| {
+        create_i2c(&[], |i2c| {
+            let mut device = Sgp40::new(i2c, NoopDelay);
             #[cfg(feature = "log")]
-            log::info!("Address {}", sht3x.address);
+            log::info!("Address {}", device.address());
         });
     }
 
@@ -259,12 +300,11 @@ mod tests {
     fn test_heater_disable() {
         let expectations = [Transaction::write(
             DEFAULT_I2C_ADDRESS,
-            u16::from(Command::<Sgp40>::HeaterDisable)
-                .to_be_bytes()
-                .to_vec(),
+            (0x3615 as u16).to_be_bytes().to_vec(),
         )];
 
-        create_i2c::<Sgp40, _>(&expectations, |mut device| {
+        create_i2c(&expectations, |i2c| {
+            let mut device = Sgp40::new(i2c, NoopDelay);
             assert!(device.heater_disable().is_ok());
         });
     }
@@ -285,16 +325,12 @@ mod tests {
         }
 
         let expectations = [
-            Transaction::write(
-                DEFAULT_I2C_ADDRESS,
-                u16::from(Command::<Sgp40>::SerialNumberFetch)
-                    .to_be_bytes()
-                    .to_vec(),
-            ),
+            Transaction::write(DEFAULT_I2C_ADDRESS, (0x3682 as u16).to_be_bytes().to_vec()),
             Transaction::read(DEFAULT_I2C_ADDRESS, serial_number.to_vec()),
         ];
 
-        create_i2c::<Sgp40, _>(&expectations, move |mut device| {
+        create_i2c(&expectations, |i2c| {
+            let mut device = Sgp40::new(i2c, NoopDelay);
             assert_eq!(device.serial_number_fetch().unwrap(), raw_serial_number);
         });
     }
@@ -308,16 +344,12 @@ mod tests {
         ));
 
         let expectations = [
-            Transaction::write(
-                DEFAULT_I2C_ADDRESS,
-                u16::from(Command::<Sgp40>::ExecuteSelfTest)
-                    .to_be_bytes()
-                    .to_vec(),
-            ),
+            Transaction::write(DEFAULT_I2C_ADDRESS, (0x280e as u16).to_be_bytes().to_vec()),
             Transaction::read(DEFAULT_I2C_ADDRESS, test_results.to_vec()),
         ];
 
-        create_i2c::<Sgp40, _>(&expectations, move |mut device| {
+        create_i2c(&expectations, |i2c| {
+            let mut device = Sgp40::new(i2c, NoopDelay);
             assert_eq!(
                 device.self_test().unwrap(),
                 TestResult::from_bits_retain(u16::MAX)
@@ -334,7 +366,7 @@ mod tests {
         ));
 
         let mut expected = BytesMut::with_capacity(8);
-        expected.put_u16(u16::from(Command::<Sgp40>::MeasureRawSignal));
+        expected.put_u16(0x260f);
         expected.put_u16(0x8000);
         expected.put_u8(sensirion_i2c::crc8::calculate(
             &(0x8000 as u16).to_be_bytes().to_vec(),
@@ -349,7 +381,8 @@ mod tests {
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
         ];
 
-        create_i2c::<Sgp40, _>(&expectations, move |mut device| {
+        create_i2c(&expectations, |i2c| {
+            let mut device = Sgp40::new(i2c, NoopDelay);
             assert_matches!(
                 device.measure_raw_signals(),
                 Ok(RawMeasurement::Partial { voc: 44 })
@@ -370,7 +403,7 @@ mod tests {
         ));
 
         let mut expected = BytesMut::with_capacity(8);
-        expected.put_u16(u16::from(Command::<Sgp41>::MeasureRawSignal));
+        expected.put_u16(0x2619);
         expected.put_u16(0x8000);
         expected.put_u8(sensirion_i2c::crc8::calculate(
             &(0x8000 as u16).to_be_bytes().to_vec(),
@@ -385,7 +418,8 @@ mod tests {
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
         ];
 
-        create_i2c::<Sgp41, _>(&expectations, move |mut device| {
+        create_i2c(&expectations, |i2c| {
+            let mut device = Sgp41::new(i2c, NoopDelay);
             assert_matches!(
                 device.measure_raw_signals(),
                 Ok(RawMeasurement::Full { voc: 44, nox: 66 })
@@ -402,9 +436,7 @@ mod tests {
         let humidity_bytes = ((humidity.as_percent() * u16::MAX as f64) / 100.0) as u16;
 
         let mut expected = BytesMut::with_capacity(8);
-        expected.put_u16(u16::from(
-            Command::<Sgp40>::MeasureRawSignalWithCompensation(temperature, humidity),
-        ));
+        expected.put_u16(0x260f);
         expected.put_u16(temperature_bytes);
         expected.put_u8(sensirion_i2c::crc8::calculate(
             &temperature_bytes.to_be_bytes(),
@@ -425,7 +457,8 @@ mod tests {
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
         ];
 
-        create_i2c::<Sgp40, _>(&expectations, move |mut device| {
+        create_i2c(&expectations, |i2c| {
+            let mut device = Sgp40::new(i2c, NoopDelay);
             assert_matches!(
                 device.measure_raw_signals_with_compensation(temperature, humidity),
                 Ok(RawMeasurement::Partial { voc: 44 })
@@ -442,9 +475,7 @@ mod tests {
         let humidity_bytes = ((humidity.as_percent() * u16::MAX as f64) / 100.0) as u16;
 
         let mut expected = BytesMut::with_capacity(8);
-        expected.put_u16(u16::from(
-            Command::<Sgp41>::MeasureRawSignalWithCompensation(temperature, humidity),
-        ));
+        expected.put_u16(0x2619);
         expected.put_u16(temperature_bytes);
         expected.put_u8(sensirion_i2c::crc8::calculate(
             &temperature_bytes.to_be_bytes(),
@@ -469,7 +500,8 @@ mod tests {
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
         ];
 
-        create_i2c::<Sgp41, _>(&expectations, move |mut device| {
+        create_i2c(&expectations, |i2c| {
+            let mut device = Sgp41::new(i2c, NoopDelay);
             assert_matches!(
                 device.measure_raw_signals_with_compensation(temperature, humidity),
                 Ok(RawMeasurement::Full { voc: 44, nox: 66 })
@@ -486,7 +518,7 @@ mod tests {
         ));
 
         let mut expected = BytesMut::with_capacity(8);
-        expected.put_u16(u16::from(Command::<Sgp41>::ExecuteConditioning));
+        expected.put_u16(0x2612);
         expected.put_u16(0x8000);
         expected.put_u8(sensirion_i2c::crc8::calculate(
             &(0x8000 as u16).to_be_bytes().to_vec(),
@@ -501,54 +533,10 @@ mod tests {
             Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
         ];
 
-        create_i2c::<Sgp41, _>(&expectations, move |mut device| {
+        create_i2c(&expectations, |i2c| {
+            let mut device = Sgp41::new(i2c, NoopDelay);
             assert_matches!(
                 device.execute_conditioning(),
-                Ok(RawMeasurement::Partial { voc: 44 })
-            );
-        });
-    }
-
-    #[test]
-    fn test_into_variant() {
-        let mut raw_signals = BytesMut::with_capacity(3);
-        raw_signals.put_u16(44);
-        raw_signals.put_u8(sensirion_i2c::crc8::calculate(
-            &44u16.to_be_bytes().to_vec(),
-        ));
-        raw_signals.put_u16(66);
-        raw_signals.put_u8(sensirion_i2c::crc8::calculate(
-            &66u16.to_be_bytes().to_vec(),
-        ));
-
-        let mut expected = BytesMut::with_capacity(8);
-        expected.put_u16(u16::from(Command::<Sgp41>::MeasureRawSignal));
-        expected.put_u16(0x8000);
-        expected.put_u8(sensirion_i2c::crc8::calculate(
-            &(0x8000 as u16).to_be_bytes().to_vec(),
-        ));
-        expected.put_u16(0x6666);
-        expected.put_u8(sensirion_i2c::crc8::calculate(
-            &(0x6666 as u16).to_be_bytes().to_vec(),
-        ));
-
-        let expectations = [
-            Transaction::write(DEFAULT_I2C_ADDRESS, expected.to_vec()),
-            Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals.to_vec()),
-            Transaction::write(DEFAULT_I2C_ADDRESS, expected.to_vec()),
-            Transaction::read(DEFAULT_I2C_ADDRESS, raw_signals[0..3].to_vec()),
-        ];
-
-        create_i2c::<Sgp41, _>(&expectations, move |mut device| {
-            assert_matches!(
-                device.measure_raw_signals(),
-                Ok(RawMeasurement::Full { voc: 44, nox: 66 })
-            );
-
-            // convert into Sgp40
-            let mut new_device = device.into_variant::<Sgp40>();
-            assert_matches!(
-                new_device.measure_raw_signals(),
                 Ok(RawMeasurement::Partial { voc: 44 })
             );
         });
