@@ -72,12 +72,14 @@ where
     }
 }
 
-struct Sgp40<I2C, D> {
+/// 
+pub struct Sgp40<I2C, D> {
     i2c: I2C,
     delay: D,
 }
 
 impl<I2C, D> Sgp40<I2C, D> {
+    /// 
     pub fn new(i2c: I2C, delay: D) -> Self {
         Self { i2c, delay }
     }
@@ -161,12 +163,14 @@ where
     }
 }
 
-struct Sgp41<I2C, D> {
+/// 
+pub struct Sgp41<I2C, D> {
     i2c: I2C,
     delay: D,
 }
 
 impl<I2C, D> Sgp41<I2C, D> {
+    /// 
     pub fn new(i2c: I2C, delay: D) -> Self {
         Self { i2c, delay }
     }
