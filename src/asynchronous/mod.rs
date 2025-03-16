@@ -3,11 +3,11 @@ use core::time::Duration;
 use bytes::{Buf, BytesMut};
 use embedded_hal_async::i2c::SevenBitAddress;
 use measurements::{Humidity, Temperature};
-use sensirion_core::{Error, asynchronous::SensirionI2c};
+use sensirion_core::{asynchronous::SensirionI2c, Error};
 
 use crate::{
-    DEFAULT_I2C_ADDRESS, RawMeasurement, TestResult,
     command::{Command, CommandConvert},
+    RawMeasurement, TestResult, DEFAULT_I2C_ADDRESS,
 };
 
 trait Sgp4x<I2C, D>: SensirionI2c<I2C, D>
@@ -72,14 +72,14 @@ where
     }
 }
 
-/// 
+///
 pub struct Sgp40<I2C, D> {
     i2c: I2C,
     delay: D,
 }
 
 impl<I2C, D> Sgp40<I2C, D> {
-    /// 
+    ///
     pub fn new(i2c: I2C, delay: D) -> Self {
         Self { i2c, delay }
     }
@@ -163,14 +163,14 @@ where
     }
 }
 
-/// 
+///
 pub struct Sgp41<I2C, D> {
     i2c: I2C,
     delay: D,
 }
 
 impl<I2C, D> Sgp41<I2C, D> {
-    /// 
+    ///
     pub fn new(i2c: I2C, delay: D) -> Self {
         Self { i2c, delay }
     }

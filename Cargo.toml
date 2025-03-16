@@ -1,7 +1,7 @@
 [package]
 name = "sensirion-sgp4x"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 authors = ["Dustin Sweigart <dustin@swigg.net>"]
 license = "MIT"
 keywords = ["sensirion", "sensor", "VOC", "NOx", "sgp4x"]

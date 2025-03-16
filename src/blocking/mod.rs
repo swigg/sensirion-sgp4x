@@ -3,11 +3,11 @@ use core::time::Duration;
 use bytes::{Buf, BytesMut};
 use embedded_hal::i2c::SevenBitAddress;
 use measurements::{Humidity, Temperature};
-use sensirion_core::{Error, blocking::SensirionI2c};
+use sensirion_core::{blocking::SensirionI2c, Error};
 
 use crate::{
-    DEFAULT_I2C_ADDRESS, RawMeasurement, TestResult,
     command::{Command, CommandConvert},
+    RawMeasurement, TestResult, DEFAULT_I2C_ADDRESS,
 };
 
 trait Sgp4x<I2C, D>: SensirionI2c<I2C, D>
